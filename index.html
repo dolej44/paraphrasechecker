@@ -18,6 +18,9 @@
       --soft-good: #dcfce7;
       --soft-warn: #fef3c7;
       --soft-bad: #fee2e2;
+      --highlight-ok: #bfdbfe;
+      --highlight-change: #fbcfe8;
+      --soft-panel: #f9fafb;
     }
 
     * { box-sizing: border-box; }
@@ -42,14 +45,25 @@
       border-radius: 16px;
       padding: 20px;
       margin-bottom: 20px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
     }
 
-    h1, h2, h3 { margin-top: 0; }
+    h1, h2, h3 {
+      margin-top: 0;
+    }
 
     .subtext {
       color: var(--muted);
       margin-top: -8px;
+    }
+
+    .goal-box {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--soft-panel);
+      border: 1px solid var(--border);
+      font-size: 14px;
     }
 
     label {
@@ -90,17 +104,6 @@
       background: #4b5563;
     }
 
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .status {
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
     .results-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -135,10 +138,60 @@
       font-size: 14px;
     }
 
-    .footer-note {
+    .footer-note,
+    .legend-text {
       color: var(--muted);
       font-size: 14px;
       margin-top: 12px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      margin-bottom: 8px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .swatch-ok { background: var(--highlight-ok); }
+    .swatch-change { background: var(--highlight-change); }
+
+    .highlight-panel {
+      background: var(--soft-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      white-space: pre-wrap;
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .mark-ok,
+    .mark-change {
+      padding: 1px 3px;
+      border-radius: 6px;
+    }
+
+    .mark-ok {
+      background: var(--highlight-ok);
+    }
+
+    .mark-change {
+      background: var(--highlight-change);
     }
   </style>
 </head>
@@ -146,7 +199,8 @@
   <div class="container">
     <div class="card">
       <h1>Paraphrase Checker</h1>
-      <p class="subtext">Paste the original text and the student paraphrase. This tool checks closeness, flags copied phrases, and can later send both texts to a back end for meaning analysis.</p>
+      <p class="subtext">Paste the original text and the student paraphrase.</p>
+      <div class="goal-box"><strong>Goal:</strong> Keep the original meaning, but use your own wording and structure.</div>
     </div>
 
     <div class="card">
@@ -160,8 +214,6 @@
         <button id="checkBtn">Check Paraphrase</button>
         <button id="clearBtn" class="secondary" type="button">Clear</button>
       </div>
-
-      <div id="status" class="status">Version 1 uses simple built-in checks. Your husband can connect the meaning checker later.</div>
     </div>
 
     <div id="resultsCard" class="card hidden">
@@ -177,18 +229,26 @@
           <div id="closenessValue">Waiting</div>
         </div>
         <div id="vaguenessCard" class="badge-card warn">
-          <h3>Vagueness</h3>
+          <h3>Detail</h3>
           <div id="vaguenessValue">Waiting</div>
         </div>
       </div>
 
-      <h3>Copied Phrases</h3>
+      <h3>Repeated Wording</h3>
       <div id="copiedPhrases"></div>
+
+      <h3>Highlighted Words</h3>
+      <div class="legend">
+        <div class="legend-item"><span class="swatch swatch-ok"></span><span>Probably okay to keep</span></div>
+        <div class="legend-item"><span class="swatch swatch-change"></span><span>Probably should be changed</span></div>
+      </div>
+      <p class="legend-text">Blue highlights show words that appear in both texts and are often okay to keep. Pink highlights show repeated wording that is more likely too close to the original.</p>
+      <div id="highlightedParaphrase" class="highlight-panel"></div>
 
       <h3>Feedback</h3>
       <ul id="feedbackList"></ul>
 
-      <p class="footer-note">This starter version does not rewrite student work. It only reports what it finds.</p>
+      <p class="footer-note">This tool does not rewrite student work. It only reports what it finds.</p>
     </div>
   </div>
 
@@ -197,7 +257,6 @@
     const paraphraseText = document.getElementById('paraphraseText');
     const checkBtn = document.getElementById('checkBtn');
     const clearBtn = document.getElementById('clearBtn');
-    const statusEl = document.getElementById('status');
     const resultsCard = document.getElementById('resultsCard');
 
     const meaningCard = document.getElementById('meaningCard');
@@ -209,10 +268,22 @@
     const vaguenessValue = document.getElementById('vaguenessValue');
     const copiedPhrases = document.getElementById('copiedPhrases');
     const feedbackList = document.getElementById('feedbackList');
+    const highlightedParaphrase = document.getElementById('highlightedParaphrase');
 
     const STOP_WORDS = new Set([
       'the','a','an','and','or','but','if','then','than','so','to','of','in','on','at','for','from','with','by','as','is','are','was','were','be','been','being','it','its','that','this','these','those','he','she','they','them','his','her','their','you','your','we','our','i','me','my','do','does','did','have','has','had','not'
     ]);
+
+    const COMMON_KEEP_WORDS = new Set([
+      'water','waters','chemical','chemicals','surface','golf','course','courses','pond','ponds','stream','streams','lake','lakes'
+    ]);
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
 
     function normalizeText(text) {
       return text
@@ -270,7 +341,35 @@
       feedbackList.appendChild(li);
     }
 
-    async function runCheck() {
+    function buildHighlightHtml(original, paraphrase, copiedPhrasesList) {
+      const originalWordSet = new Set(getMeaningfulWords(original));
+      const copiedWordSet = new Set(copiedPhrasesList.flatMap(phrase => phrase.split(' ')));
+      const tokens = paraphrase.match(/\w+|[^\w\s]+|\s+/g) || [];
+
+      return tokens.map(token => {
+        if (/^\s+$/.test(token)) {
+          return token;
+        }
+
+        if (!/^\w+$/.test(token)) {
+          return escapeHtml(token);
+        }
+
+        const normalized = token.toLowerCase();
+
+        if (copiedWordSet.has(normalized) && !COMMON_KEEP_WORDS.has(normalized)) {
+          return `<span class="mark-change">${escapeHtml(token)}</span>`;
+        }
+
+        if (originalWordSet.has(normalized)) {
+          return `<span class="mark-ok">${escapeHtml(token)}</span>`;
+        }
+
+        return escapeHtml(token);
+      }).join('');
+    }
+
+    function runCheck() {
       const original = originalText.value.trim();
       const paraphrase = paraphraseText.value.trim();
 
@@ -281,6 +380,7 @@
 
       feedbackList.innerHTML = '';
       copiedPhrases.innerHTML = '';
+      highlightedParaphrase.innerHTML = '';
       resultsCard.classList.remove('hidden');
 
       const originalWords = getMeaningfulWords(original);
@@ -296,38 +396,35 @@
         ? paraphrase.length / original.length
         : 1;
 
-      // Meaning placeholder for later backend connection.
-      meaningValue.textContent = 'Back end not connected yet';
+      meaningValue.textContent = 'Meaning check coming next';
       setCardState(meaningCard, 'warn');
 
-      // Closeness rating.
       if (copied.length >= 3 || overlapRatio > 0.55) {
-        closenessValue.textContent = 'Too close';
+        closenessValue.textContent = 'Too Close';
         setCardState(closenessCard, 'bad');
-        addFeedbackItem('The paraphrase keeps too much of the original wording.');
+        addFeedbackItem('This paraphrase keeps too much of the original wording.');
       } else if (copied.length >= 1 || overlapRatio > 0.35) {
-        closenessValue.textContent = 'Borderline';
+        closenessValue.textContent = 'Needs Revision';
         setCardState(closenessCard, 'warn');
-        addFeedbackItem('Some wording is still very close to the original.');
+        addFeedbackItem('This paraphrase keeps some wording that is still very close to the original.');
       } else {
-        closenessValue.textContent = 'Acceptable';
+        closenessValue.textContent = 'Good Separation';
         setCardState(closenessCard, 'good');
-        addFeedbackItem('The wording shows reasonable separation from the original.');
+        addFeedbackItem('This paraphrase shows reasonable separation from the original wording.');
       }
 
-      // Vagueness rating.
       if (lengthRatio < 0.45) {
-        vaguenessValue.textContent = 'Too vague or too short';
+        vaguenessValue.textContent = 'Too Vague';
         setCardState(vaguenessCard, 'bad');
-        addFeedbackItem('The paraphrase may be leaving out too much detail.');
+        addFeedbackItem('This paraphrase may be leaving out too much important detail.');
       } else if (lengthRatio < 0.65) {
-        vaguenessValue.textContent = 'Somewhat vague';
+        vaguenessValue.textContent = 'Missing Some Detail';
         setCardState(vaguenessCard, 'warn');
-        addFeedbackItem('Check whether all important ideas are still included.');
+        addFeedbackItem('This paraphrase may need a little more detail to match the original clearly.');
       } else {
-        vaguenessValue.textContent = 'Specific enough';
+        vaguenessValue.textContent = 'Strong Detail';
         setCardState(vaguenessCard, 'good');
-        addFeedbackItem('The paraphrase appears to keep a reasonable amount of detail.');
+        addFeedbackItem('This paraphrase appears to keep a reasonable amount of detail.');
       }
 
       if (copied.length > 0) {
@@ -341,9 +438,14 @@
         copiedPhrases.textContent = 'No repeated 2–4 word phrases found.';
       }
 
-      addFeedbackItem('Meaning analysis can be added later through a secure back end.');
+      highlightedParaphrase.innerHTML = buildHighlightHtml(original, paraphrase, copied);
 
-      statusEl.textContent = 'Check complete.';
+      addFeedbackItem('Use the pink highlights as your first places to revise.');
+      addFeedbackItem('Blue highlights are words that overlap with the original and are more likely okay to keep.');
+
+      if (copied.length === 0 && overlapRatio < 0.2) {
+        addFeedbackItem('The wording is nicely changed. Next, make sure the meaning still matches the original.');
+      }
     }
 
     function clearAll() {
@@ -351,8 +453,8 @@
       paraphraseText.value = '';
       feedbackList.innerHTML = '';
       copiedPhrases.innerHTML = '';
+      highlightedParaphrase.innerHTML = '';
       resultsCard.classList.add('hidden');
-      statusEl.textContent = 'Version 1 uses simple built-in checks. Your husband can connect the meaning checker later.';
     }
 
     checkBtn.addEventListener('click', runCheck);
