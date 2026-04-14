@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paraphrase Checker</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --accent: #2563eb;
+      --good: #166534;
+      --warn: #92400e;
+      --bad: #991b1b;
+      --soft-good: #dcfce7;
+      --soft-warn: #fef3c7;
+      --soft-bad: #fee2e2;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+    }
+
+    h1, h2, h3 { margin-top: 0; }
+
+    .subtext {
+      color: var(--muted);
+      margin-top: -8px;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+      resize: vertical;
+      margin-bottom: 16px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #4b5563;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .badge-card {
+      border-radius: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+    }
+
+    .good { background: var(--soft-good); color: var(--good); }
+    .warn { background: var(--soft-warn); color: var(--warn); }
+    .bad { background: var(--soft-bad); color: var(--bad); }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .copied-phrase {
+      display: inline-block;
+      background: #e5e7eb;
+      border-radius: 999px;
+      padding: 6px 10px;
+      margin: 4px 6px 0 0;
+      font-size: 14px;
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Paraphrase Checker</h1>
+      <p class="subtext">Paste the original text and the student paraphrase. This tool checks closeness, flags copied phrases, and can later send both texts to a back end for meaning analysis.</p>
+    </div>
+
+    <div class="card">
+      <label for="originalText">Original Text</label>
+      <textarea id="originalText" placeholder="Paste the original passage here..."></textarea>
+
+      <label for="paraphraseText">Student Paraphrase</label>
+      <textarea id="paraphraseText" placeholder="Paste the student paraphrase here..."></textarea>
+
+      <div class="button-row">
+        <button id="checkBtn">Check Paraphrase</button>
+        <button id="clearBtn" class="secondary" type="button">Clear</button>
+      </div>
+
+      <div id="status" class="status">Version 1 uses simple built-in checks. Your husband can connect the meaning checker later.</div>
+    </div>
+
+    <div id="resultsCard" class="card hidden">
+      <h2>Results</h2>
+
+      <div class="results-grid">
+        <div id="meaningCard" class="badge-card warn">
+          <h3>Meaning</h3>
+          <div id="meaningValue">Not checked yet</div>
+        </div>
+        <div id="closenessCard" class="badge-card warn">
+          <h3>Closeness</h3>
+          <div id="closenessValue">Waiting</div>
+        </div>
+        <div id="vaguenessCard" class="badge-card warn">
+          <h3>Vagueness</h3>
+          <div id="vaguenessValue">Waiting</div>
+        </div>
+      </div>
+
+      <h3>Copied Phrases</h3>
+      <div id="copiedPhrases"></div>
+
+      <h3>Feedback</h3>
+      <ul id="feedbackList"></ul>
+
+      <p class="footer-note">This starter version does not rewrite student work. It only reports what it finds.</p>
+    </div>
+  </div>
+
+  <script>
+    const originalText = document.getElementById('originalText');
+    const paraphraseText = document.getElementById('paraphraseText');
+    const checkBtn = document.getElementById('checkBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusEl = document.getElementById('status');
+    const resultsCard = document.getElementById('resultsCard');
+
+    const meaningCard = document.getElementById('meaningCard');
+    const closenessCard = document.getElementById('closenessCard');
+    const vaguenessCard = document.getElementById('vaguenessCard');
+
+    const meaningValue = document.getElementById('meaningValue');
+    const closenessValue = document.getElementById('closenessValue');
+    const vaguenessValue = document.getElementById('vaguenessValue');
+    const copiedPhrases = document.getElementById('copiedPhrases');
+    const feedbackList = document.getElementById('feedbackList');
+
+    const STOP_WORDS = new Set([
+      'the','a','an','and','or','but','if','then','than','so','to','of','in','on','at','for','from','with','by','as','is','are','was','were','be','been','being','it','its','that','this','these','those','he','she','they','them','his','her','their','you','your','we','our','i','me','my','do','does','did','have','has','had','not'
+    ]);
+
+    function normalizeText(text) {
+      return text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s']/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function getMeaningfulWords(text) {
+      return normalizeText(text)
+        .split(' ')
+        .filter(word => word && !STOP_WORDS.has(word));
+    }
+
+    function getSharedWords(originalWords, paraphraseWords) {
+      const originalSet = new Set(originalWords);
+      return [...new Set(paraphraseWords.filter(word => originalSet.has(word)))];
+    }
+
+    function getNgrams(words, n) {
+      const grams = [];
+      for (let i = 0; i <= words.length - n; i++) {
+        grams.push(words.slice(i, i + n).join(' '));
+      }
+      return grams;
+    }
+
+    function getCopiedPhrases(original, paraphrase) {
+      const originalWords = getMeaningfulWords(original);
+      const paraphraseWords = getMeaningfulWords(paraphrase);
+      const matches = new Set();
+
+      [4, 3, 2].forEach(n => {
+        const originalNgrams = new Set(getNgrams(originalWords, n));
+        const paraphraseNgrams = getNgrams(paraphraseWords, n);
+        paraphraseNgrams.forEach(phrase => {
+          if (originalNgrams.has(phrase)) {
+            matches.add(phrase);
+          }
+        });
+      });
+
+      return [...matches].sort((a, b) => b.length - a.length);
+    }
+
+    function setCardState(card, state) {
+      card.classList.remove('good', 'warn', 'bad');
+      card.classList.add(state);
+    }
+
+    function addFeedbackItem(text) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      feedbackList.appendChild(li);
+    }
+
+    async function runCheck() {
+      const original = originalText.value.trim();
+      const paraphrase = paraphraseText.value.trim();
+
+      if (!original || !paraphrase) {
+        alert('Please paste both the original text and the student paraphrase.');
+        return;
+      }
+
+      feedbackList.innerHTML = '';
+      copiedPhrases.innerHTML = '';
+      resultsCard.classList.remove('hidden');
+
+      const originalWords = getMeaningfulWords(original);
+      const paraphraseWords = getMeaningfulWords(paraphrase);
+      const sharedWords = getSharedWords(originalWords, paraphraseWords);
+      const copied = getCopiedPhrases(original, paraphrase);
+
+      const overlapRatio = originalWords.length
+        ? sharedWords.length / new Set(originalWords).size
+        : 0;
+
+      const lengthRatio = original.length
+        ? paraphrase.length / original.length
+        : 1;
+
+      // Meaning placeholder for later backend connection.
+      meaningValue.textContent = 'Back end not connected yet';
+      setCardState(meaningCard, 'warn');
+
+      // Closeness rating.
+      if (copied.length >= 3 || overlapRatio > 0.55) {
+        closenessValue.textContent = 'Too close';
+        setCardState(closenessCard, 'bad');
+        addFeedbackItem('The paraphrase keeps too much of the original wording.');
+      } else if (copied.length >= 1 || overlapRatio > 0.35) {
+        closenessValue.textContent = 'Borderline';
+        setCardState(closenessCard, 'warn');
+        addFeedbackItem('Some wording is still very close to the original.');
+      } else {
+        closenessValue.textContent = 'Acceptable';
+        setCardState(closenessCard, 'good');
+        addFeedbackItem('The wording shows reasonable separation from the original.');
+      }
+
+      // Vagueness rating.
+      if (lengthRatio < 0.45) {
+        vaguenessValue.textContent = 'Too vague or too short';
+        setCardState(vaguenessCard, 'bad');
+        addFeedbackItem('The paraphrase may be leaving out too much detail.');
+      } else if (lengthRatio < 0.65) {
+        vaguenessValue.textContent = 'Somewhat vague';
+        setCardState(vaguenessCard, 'warn');
+        addFeedbackItem('Check whether all important ideas are still included.');
+      } else {
+        vaguenessValue.textContent = 'Specific enough';
+        setCardState(vaguenessCard, 'good');
+        addFeedbackItem('The paraphrase appears to keep a reasonable amount of detail.');
+      }
+
+      if (copied.length > 0) {
+        copied.forEach(phrase => {
+          const span = document.createElement('span');
+          span.className = 'copied-phrase';
+          span.textContent = phrase;
+          copiedPhrases.appendChild(span);
+        });
+      } else {
+        copiedPhrases.textContent = 'No repeated 2–4 word phrases found.';
+      }
+
+      addFeedbackItem('Meaning analysis can be added later through a secure back end.');
+
+      statusEl.textContent = 'Check complete.';
+    }
+
+    function clearAll() {
+      originalText.value = '';
+      paraphraseText.value = '';
+      feedbackList.innerHTML = '';
+      copiedPhrases.innerHTML = '';
+      resultsCard.classList.add('hidden');
+      statusEl.textContent = 'Version 1 uses simple built-in checks. Your husband can connect the meaning checker later.';
+    }
+
+    checkBtn.addEventListener('click', runCheck);
+    clearBtn.addEventListener('click', clearAll);
+  </script>
+</body>
+</html>
